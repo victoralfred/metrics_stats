@@ -1,5 +1,0 @@
-if(EXISTS "/workdir/build/metrics_agent_test[1]_tests.cmake")
-  include("/workdir/build/metrics_agent_test[1]_tests.cmake")
-else()
-  add_test(metrics_agent_test_NOT_BUILT metrics_agent_test_NOT_BUILT)
-endif()
