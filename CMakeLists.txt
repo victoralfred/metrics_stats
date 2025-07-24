@@ -21,6 +21,7 @@ find_package(jwt-cpp REQUIRED)
 add_library(metrics_agent
     src/cpu_stats.cpp
     src/mem_stats.cpp
+    src/disk_stats.cpp
     )
 target_include_directories(metrics_agent
     PRIVATE
@@ -54,10 +55,12 @@ FetchContent_MakeAvailable(googletest)
 add_executable(metrics_agent_test
     tests/cpu_stats_test.cpp
     tests/mem_stats_test.cpp
+    tests/disk_stats_test.cpp
 )
 add_test(metrics_agent_test
     tesst/cpu_stats_test.cpp
     tests/mem_stats_test.cpp
+    tests/disk_stats_test.cpp
 )
 target_include_directories(metrics_agent_test PRIVATE 
     ${CMAKE_SOURCE_DIR}/include
