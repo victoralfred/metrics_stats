@@ -9,6 +9,8 @@ ext_modules = [
             "src/binding.cpp",
             "src/cpu_stats.cpp",
             "src/mem_stats.cpp",
+            "src/disk_stats.cpp",
+            "src/net_stats.cpp",
         ],
         include_dirs=[
             pybind11.get_include(),
