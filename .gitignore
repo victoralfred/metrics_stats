@@ -1,1 +1,6 @@
 .vscode
+.v0.*
+*.xz
+*.gz
+/mnt
+/v0.1

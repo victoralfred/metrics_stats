@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmetrics_agent.a CMakeFiles/metrics_agent.dir/src/cpu_stats.cpp.o CMakeFiles/metrics_agent.dir/src/mem_stats.cpp.o CMakeFiles/metrics_agent.dir/src/disk_stats.cpp.o CMakeFiles/metrics_agent.dir/src/net_stats.cpp.o
+/usr/bin/ranlib libmetrics_agent.a

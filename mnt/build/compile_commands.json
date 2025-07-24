@@ -1,0 +1,62 @@
+[
+{
+  "directory": "/workdir/build",
+  "command": "/usr/bin/c++ -DJWT_DISABLE_PICOJSON -I/workdir/include -isystem /vcpkg/installed/x64-linux/include -g -std=c++17 -o CMakeFiles/metrics_agent.dir/src/cpu_stats.cpp.o -c /workdir/src/cpu_stats.cpp",
+  "file": "/workdir/src/cpu_stats.cpp"
+},
+{
+  "directory": "/workdir/build",
+  "command": "/usr/bin/c++ -DJWT_DISABLE_PICOJSON -I/workdir/include -isystem /vcpkg/installed/x64-linux/include -g -std=c++17 -o CMakeFiles/metrics_agent.dir/src/mem_stats.cpp.o -c /workdir/src/mem_stats.cpp",
+  "file": "/workdir/src/mem_stats.cpp"
+},
+{
+  "directory": "/workdir/build",
+  "command": "/usr/bin/c++ -DJWT_DISABLE_PICOJSON -I/workdir/include -isystem /vcpkg/installed/x64-linux/include -g -std=c++17 -o CMakeFiles/metrics_agent.dir/src/disk_stats.cpp.o -c /workdir/src/disk_stats.cpp",
+  "file": "/workdir/src/disk_stats.cpp"
+},
+{
+  "directory": "/workdir/build",
+  "command": "/usr/bin/c++ -DJWT_DISABLE_PICOJSON -I/workdir/include -isystem /vcpkg/installed/x64-linux/include -g -std=c++17 -o CMakeFiles/metrics_agent.dir/src/net_stats.cpp.o -c /workdir/src/net_stats.cpp",
+  "file": "/workdir/src/net_stats.cpp"
+},
+{
+  "directory": "/workdir/build",
+  "command": "/usr/bin/c++  -I/workdir/include -I/workdir/src -isystem /workdir/build/_deps/googletest-src/googletest/include -isystem /workdir/build/_deps/googletest-src/googletest -g -std=c++17 -o CMakeFiles/metrics_agent_test.dir/tests/cpu_stats_test.cpp.o -c /workdir/tests/cpu_stats_test.cpp",
+  "file": "/workdir/tests/cpu_stats_test.cpp"
+},
+{
+  "directory": "/workdir/build",
+  "command": "/usr/bin/c++  -I/workdir/include -I/workdir/src -isystem /workdir/build/_deps/googletest-src/googletest/include -isystem /workdir/build/_deps/googletest-src/googletest -g -std=c++17 -o CMakeFiles/metrics_agent_test.dir/tests/mem_stats_test.cpp.o -c /workdir/tests/mem_stats_test.cpp",
+  "file": "/workdir/tests/mem_stats_test.cpp"
+},
+{
+  "directory": "/workdir/build",
+  "command": "/usr/bin/c++  -I/workdir/include -I/workdir/src -isystem /workdir/build/_deps/googletest-src/googletest/include -isystem /workdir/build/_deps/googletest-src/googletest -g -std=c++17 -o CMakeFiles/metrics_agent_test.dir/tests/disk_stats_test.cpp.o -c /workdir/tests/disk_stats_test.cpp",
+  "file": "/workdir/tests/disk_stats_test.cpp"
+},
+{
+  "directory": "/workdir/build",
+  "command": "/usr/bin/c++  -I/workdir/include -I/workdir/src -isystem /workdir/build/_deps/googletest-src/googletest/include -isystem /workdir/build/_deps/googletest-src/googletest -g -std=c++17 -o CMakeFiles/metrics_agent_test.dir/tests/net_stats_test.cpp.o -c /workdir/tests/net_stats_test.cpp",
+  "file": "/workdir/tests/net_stats_test.cpp"
+},
+{
+  "directory": "/workdir/build/_deps/googletest-build/googlemock",
+  "command": "/usr/bin/c++  -I/workdir/build/_deps/googletest-src/googlemock/include -I/workdir/build/_deps/googletest-src/googlemock -isystem /workdir/build/_deps/googletest-src/googletest/include -isystem /workdir/build/_deps/googletest-src/googletest -g -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -std=c++17 -o CMakeFiles/gmock.dir/src/gmock-all.cc.o -c /workdir/build/_deps/googletest-src/googlemock/src/gmock-all.cc",
+  "file": "/workdir/build/_deps/googletest-src/googlemock/src/gmock-all.cc"
+},
+{
+  "directory": "/workdir/build/_deps/googletest-build/googlemock",
+  "command": "/usr/bin/c++  -isystem /workdir/build/_deps/googletest-src/googlemock/include -isystem /workdir/build/_deps/googletest-src/googlemock -isystem /workdir/build/_deps/googletest-src/googletest/include -isystem /workdir/build/_deps/googletest-src/googletest -g -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -std=c++17 -o CMakeFiles/gmock_main.dir/src/gmock_main.cc.o -c /workdir/build/_deps/googletest-src/googlemock/src/gmock_main.cc",
+  "file": "/workdir/build/_deps/googletest-src/googlemock/src/gmock_main.cc"
+},
+{
+  "directory": "/workdir/build/_deps/googletest-build/googletest",
+  "command": "/usr/bin/c++  -I/workdir/build/_deps/googletest-src/googletest/include -I/workdir/build/_deps/googletest-src/googletest -g -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -std=c++17 -o CMakeFiles/gtest.dir/src/gtest-all.cc.o -c /workdir/build/_deps/googletest-src/googletest/src/gtest-all.cc",
+  "file": "/workdir/build/_deps/googletest-src/googletest/src/gtest-all.cc"
+},
+{
+  "directory": "/workdir/build/_deps/googletest-build/googletest",
+  "command": "/usr/bin/c++  -isystem /workdir/build/_deps/googletest-src/googletest/include -isystem /workdir/build/_deps/googletest-src/googletest -g -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -std=c++17 -o CMakeFiles/gtest_main.dir/src/gtest_main.cc.o -c /workdir/build/_deps/googletest-src/googletest/src/gtest_main.cc",
+  "file": "/workdir/build/_deps/googletest-src/googletest/src/gtest_main.cc"
+}
+]
