@@ -4,7 +4,7 @@ import pybind11
 
 ext_modules = [
     Pybind11Extension(
-        "sysstats",
+        "py_metrics_agent",
         [
             "src/binding.cpp",
             "src/cpu_stats.cpp",
@@ -20,7 +20,7 @@ ext_modules = [
     ),
 ]
 setup(
-    name="sysstats",
+    name="py_metrics_agent",
     version="0.1",
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
