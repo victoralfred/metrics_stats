@@ -1,61 +1,302 @@
 import sys
-import os
+import time
+import platform
 
-# --- Configuration for your vcpkg installation ---
-# Option 1: Get VCPKG_ROOT from environment variable (recommended for flexibility)
-vcpkg_root = os.environ.get("VCPKG_ROOT")
+if sys.version_info < (3, 6):
+    raise RuntimeError("This module requires Python 3.6 or higher.")
 
-# Option 2: Hardcode the path to your vcpkg root (less flexible, but works if env var isn't set)
-# vcpkg_root = "/path/to/your/vcpkg" # <--- UNCOMMENT AND REPLACE IF YOU DON'T USE ENV VAR
-
-if vcpkg_root is None:
-    print("Error: VCPKG_ROOT environment variable not set.")
-    print("Please set it to the root directory of your vcpkg installation,")
-    print("or uncomment and set 'vcpkg_root' directly in this script.")
-    sys.exit(1) # Exit if vcpkg_root is not defined
-
-# Construct the full path to the directory containing your .so file
-# Based on your provided structure: vcpkg_root/installed/x64-linux/lib
-module_lib_path = os.path.join(vcpkg_root, "installed", "x64-linux", "lib")
-
-# Add this directory to sys.path
-if os.path.isdir(module_lib_path):
-    sys.path.append(module_lib_path)
-    print(f"Added '{module_lib_path}' to sys.path for module discovery.")
-else:
-    print(f"Warning: Directory '{module_lib_path}' does not exist.")
-    print("Please ensure vcpkg is installed correctly and sysstats:x64-linux was built successfully.")
-    print("Current working directory:", os.getcwd())
-    print("Contents of vcpkg_root/installed:", os.listdir(os.path.join(vcpkg_root, "installed")))
-    # You might want to exit here if the module is critical
-    # sys.exit(1)
-
-# --- Now, attempt to import the sysstats module ---
+# Import the py_metrics_agent module
 try:
-    import sysstats
-    print("Successfully imported 'sysstats' module!")
-
-    # --- You can now use the functions/classes from the sysstats module ---
-    # For example, if sysstats has a function called `get_cpu_info()`:
-    # cpu_info = sysstats.get_cpu_info()
-    # print(f"CPU Information: {cpu_info}")
-
-    # Or if it has a function to get memory usage:
-    # mem_usage = sysstats.get_memory_usage()
-    # print(f"Memory Usage: {mem_usage}")
-
-    # Replace these examples with actual functions provided by your sysstats module
-    # To see what's available, you could use:
-    # print(dir(sysstats))
-
+    # Adjust path to where the module is built if necessary
+    sys.path.append("/home/voseghale/metrics_stats/build")
+    import py_metrics_agent
+    print(f"Successfully imported py_metrics_agent from: {py_metrics_agent.__file__}")
 except ImportError as e:
-    print(f"Error: Could not import 'sysstats' module.")
-    print(f"Reason: {e}")
-    print("Please check:")
-    print(f"  1. If '{module_lib_path}' is indeed the correct path.")
-    print(f"  2. If 'sysstats.cpython-39-x86_64-linux-gnu.so' exists in that directory.")
-    print(f"  3. If your Python version (3.9 in this case) matches the compiled module.")
-    print(f"  4. If all necessary shared libraries (dependencies of the .so) are available on your system.")
-    print("Current sys.path:", sys.path)
+    raise RuntimeError(f"Failed to import py_metrics_agent. Ensure it is built and installed correctly. Error: {e}") from e
+
+print("--- Testing CPUStats object ---")
+try:
+    # CPUStats constructor: (user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice, usage_percent)
+    # Default usage_percent is 0.0 for manual instantiation, it's calculated by `calculate_usage_percentage`
+    stats1 = py_metrics_agent.CPUStats(user=100, nice=0, system=50, idle=850, iowait=0, irq=0, softirq=0, steal=0, guest=0, guest_nice=0)
+    print(f"Initial stats: {stats1}")
+    print(f"Total active time: {stats1.get_total_active_time()}")
+    print(f"Total time: {stats1.get_total_time()}")
+
+    # Accessing and modifying members
+    stats1.user += 10
+    print(f"Stats after user activity: {stats1}")
+except AttributeError as e:
+    print(f"Error accessing CPUStats attributes/methods: {e}. Check CPUStats binding in C++.")
+except TypeError as e:
+    print(f"Error creating CPUStats object: {e}. Check CPUStats constructor binding in C++.")
 except Exception as e:
-    print(f"An unexpected error occurred after import: {e}")
+    print(f"An unexpected error occurred during CPUStats object test: {e}")
+
+
+print("\n--- Testing py_metrics_agent.get_cpu_stats() (current system stats) ---")
+try:
+    # This calls the C++ CPUStatsReader::getCPUStats() which reads from /proc/stat
+    current_raw_stats = py_metrics_agent.get_cpu_stats()
+    print(f"Current raw CPU stats: {current_raw_stats}")
+    print(f"Current raw total time: {current_raw_stats.get_total_time()}")
+    print(f"Note: usage_percent is 0.0 for raw stats directly from reader: {current_raw_stats.usage_percent}")
+
+except RuntimeError as e:
+    print(f"Error getting current CPU stats: {e}")
+except Exception as e:
+    print(f"An unexpected error occurred getting current CPU stats: {e}")
+
+print("\n--- Testing py_metrics_agent.get_cpu_stats_from_string() ---")
+mock_proc_stat_line = "cpu 1000 200 300 4000 50 10 5 0 0 0"
+try:
+    mock_stats = py_metrics_agent.get_cpu_stats_from_string(mock_proc_stat_line)
+    print(f"Mock CPU stats from string: {mock_stats}")
+    print(f"Mock total active time: {mock_stats.get_total_active_time()}")
+except Exception as e:
+    print(f"Error testing get_cpu_stats_from_string: {e}")
+
+
+print("\n--- Testing calculate_usage_percentage ---")
+try:
+    # These values are arbitrary for testing the calculation, not based on actual /proc/stat lines
+    prev_snap = py_metrics_agent.CPUStats(user=1000, nice=0, system=200, idle=8800, iowait=0, irq=0, softirq=0, steal=0, guest=0, guest_nice=0) # Total 10000, Active 1200
+    curr_snap = py_metrics_agent.CPUStats(user=1100, nice=0, system=220, idle=9700, iowait=0, irq=0, softirq=0, steal=0, guest=0, guest_nice=0) # Total 11020, Active 1320
+
+    time_delta_ms = 1000
+
+    # The C++ function handles the time_delta_ms implicitly for calculating the percentage based on tick differences.
+    usage_calc = py_metrics_agent.calculate_usage_percentage(curr_snap, prev_snap, time_delta_ms)
+    print(f"Calculated usage percentage: {usage_calc:.2f}%")
+
+    # Test error for non-positive time_delta_ms
+    try:
+        py_metrics_agent.calculate_usage_percentage(curr_snap, prev_snap, 0)
+    except ValueError as e:
+        print(f"Caught expected error for 0 time_delta: {e}")
+
+except Exception as e:
+    print(f"Error testing calculate_usage_percentage: {e}")
+
+
+print("\n--- Testing get_cpu_usage_over_time (example utility) ---")
+try:
+    print("Measuring CPU usage over 1 second...")
+    usage_live = py_metrics_agent.get_cpu_usage_over_time(1000) # 1000 ms = 1 second
+    print(f"Live CPU usage over 1 second: {usage_live:.2f}%")
+
+    print("Measuring CPU usage over 0.5 seconds...")
+    usage_live_short = py_metrics_agent.get_cpu_usage_over_time(500) # 500 ms = 0.5 seconds
+    print(f"Live CPU usage over 0.5 seconds: {usage_live_short:.2f}%")
+
+except ValueError as e:
+    print(f"Error: {e}. Check if interval is positive.")
+except RuntimeError as e:
+    print(f"System Error: {e}")
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")
+
+print("\n--- Testing MemoryStats and MeMStatsReader ---")
+try:
+    # Test MemStats object creation
+    # The C++ binding for MemStats currently only supports a default constructor.
+    # We create a default object and then set its members.
+    mem_stats_mock = py_metrics_agent.MemStats()
+    mem_stats_mock.total = 16 * 1024 * 1024
+    mem_stats_mock.free = 8 * 1024 * 1024
+    mem_stats_mock.available = 10 * 1024 * 1024
+    print(f"Mock memory stats: {mem_stats_mock}")
+    print(f"Mock total memory: {mem_stats_mock.total} KB")
+
+    # Test py_metrics_agent.get_mem_stats()
+    current_mem_stats = py_metrics_agent.get_mem_stats()
+    print(f"Current system memory stats: {current_mem_stats}")
+    print(f"Total system memory: {current_mem_stats.total} KB")
+    print(f"Free system memory: {current_mem_stats.free} KB")
+    print(f"Available system memory: {current_mem_stats.available} KB")
+    print(f"Cached memory: {current_mem_stats.cached} KB")
+
+except AttributeError as e:
+    print(f"Error accessing MemStats attributes/methods: {e}. Check MemStats binding in C++.")
+except TypeError as e:
+    print(f"Error creating MemStats object: {e}. Check MemStats constructor binding in C++.")
+except Exception as e:
+    print(f"An error occurred during memory stats testing: {e}")
+
+
+print("\n--- Testing NetworkStats and NetworkStatsReader ---")
+try:
+    # NetStats constructor: (interface_name, rx_bytes, rx_packets, rx_errors, rx_dropped, tx_bytes, tx_packets, tx_errors, tx_dropped)
+    net_stats1 = py_metrics_agent.NetStats(
+        interface_name="eth0",
+        rx_bytes=10000, rx_packets=100, rx_errors=0, rx_dropped=0,
+        tx_bytes=5000, tx_packets=50, tx_errors=0, tx_dropped=0
+    )
+    print(f"Initial network stats: {net_stats1}")
+    print(f"Interface: {net_stats1.interface_name}, Rx Bytes: {net_stats1.rx_bytes}, Tx Bytes: {net_stats1.tx_bytes}")
+
+    # Test py_metrics_agent.get_net_stats() (returns a single aggregated NetStats object)
+    # The C++ binding for get_net_stats() without arguments returns a single aggregated NetStats object.
+    aggregated_net_stats = py_metrics_agent.get_net_stats()
+    print("\nCurrent aggregated network stats (single object):")
+    if isinstance(aggregated_net_stats, py_metrics_agent.NetStats):
+        print(f"  Aggregated: {aggregated_net_stats}")
+        print(f"  Aggregated Rx Bytes: {aggregated_net_stats.rx_bytes}, Aggregated Tx Bytes: {aggregated_net_stats.tx_bytes}")
+    else:
+        print(f"  Expected a single NetStats object, but got: {type(aggregated_net_stats)}")
+
+
+    # Test py_metrics_agent.get_net_stats_per_interface() (returns a dictionary/map)
+    # The C++ binding for get_net_stats_per_interface() returns a std::map<std::string, NetStats>.
+    net_stats_map = py_metrics_agent.get_net_stats_per_interface()
+    print("\nCurrent network stats per interface (as a dictionary):")
+    if isinstance(net_stats_map, dict):
+        for iface, stats in net_stats_map.items():
+            print(f"  {iface}: Rx: {stats.rx_bytes}, Tx: {stats.tx_bytes}")
+    else:
+        print(f"  Expected a dictionary (map) of NetStats, but got: {type(net_stats_map)}")
+
+
+    # Test calculate_network_throughput
+    prev_net_snap = py_metrics_agent.NetStats(
+        interface_name="eth0", rx_bytes=1000, tx_bytes=500, rx_packets=10, tx_packets=5,
+        rx_errors=0, tx_errors=0, rx_dropped=0, tx_dropped=0
+    )
+    curr_net_snap = py_metrics_agent.NetStats(
+        interface_name="eth0", rx_bytes=2000, tx_bytes=1000, rx_packets=20, tx_packets=10,
+        rx_errors=0, tx_errors=0, rx_dropped=0, tx_dropped=0
+    )
+    net_time_delta_ms = 1000 # 1 second
+
+    throughput = py_metrics_agent.calculate_network_throughput(
+        curr_net_snap, prev_net_snap, net_time_delta_ms
+    )
+    print(f"\nNetwork throughput (eth0) over {net_time_delta_ms}ms: Rx {throughput.rx_kbps:.2f} KB/s, Tx {throughput.tx_kbps:.2f} KB/s")
+
+    # Test error for non-positive time_delta_ms
+    try:
+        py_metrics_agent.calculate_network_throughput(curr_net_snap, prev_net_snap, 0)
+    except ValueError as e:
+        print(f"Caught expected error for 0 time_delta: {e}")
+
+except AttributeError as e:
+    print(f"Error accessing NetworkStats attributes/methods: {e}. Check NetworkStats binding in C++.")
+except TypeError as e:
+    print(f"Error creating NetworkStats object: {e}. Check NetworkStats constructor binding in C++.")
+except Exception as e:
+    print(f"An error occurred during network stats testing: {e}")
+
+print("\n--- Testing DiskStats and DiskStatsReader ---")
+def format_bytes(byte_count):
+    """Helper to format bytes into KB, MB, GB, etc."""
+    if byte_count is None:
+        return "N/A"
+    power = 1024
+    n = 0
+    power_labels = {0: '', 1: 'K', 2: 'M', 3: 'G', 4: 'T'}
+    while byte_count >= power and n < len(power_labels):
+        byte_count /= power
+        n += 1
+    return f"{byte_count:.2f} {power_labels[n]}B"
+
+try:
+    # DiskStats constructor: (device, read_bytes, write_bytes, read_time_ms, write_time_ms)
+    disk_stats1 = py_metrics_agent.DiskStats(
+        device="sda", read_bytes=50000, write_bytes=10000, read_time_ms=500, write_time_ms=100
+    )
+    print(f"Initial disk stats: {disk_stats1}")
+    print(f"Device: {disk_stats1.device}, Read Bytes: {disk_stats1.read_bytes}, Write Bytes: {disk_stats1.write_bytes}")
+
+    # Test py_metrics_agent.get_disk_stats() (no args - aggregated)
+    # The C++ binding for get_disk_stats() without arguments returns a single aggregated DiskStats object.
+    all_disk_stats_aggregated = py_metrics_agent.get_disk_stats()
+    print("\nCurrent aggregated disk stats (single object):")
+    if isinstance(all_disk_stats_aggregated, py_metrics_agent.DiskStats):
+        print(f"  Aggregated: {all_disk_stats_aggregated}")
+        print(f"  Aggregated Read Bytes: {format_bytes(all_disk_stats_aggregated.read_bytes)}")
+        print(f"  Aggregated Write Bytes: {format_bytes(all_disk_stats_aggregated.write_bytes)}")
+        # Note: If read_bytes and write_bytes are consistently 0 for aggregated stats,
+        # this might indicate an issue in the C++ backend's implementation for aggregating disk I/O.
+        # Please verify the C++ logic or the data source (/proc/diskstats) in your environment.
+    else:
+        print(f"  Expected a single DiskStats object, but got: {type(all_disk_stats_aggregated)}")
+
+
+    # Test py_metrics_agent.get_disk_stats(device_name) (specific device)
+    # This requires a real device name on your system. Using a placeholder here.
+    # On Linux, you can find device names with `lsblk` (e.g., 'sda', 'nvme0n1', 'vda').
+    example_device_name = "nvme0n1" # !!! IMPORTANT: CHANGE THIS TO A REAL DEVICE ON YOUR SYSTEM FOR LIVE TESTING !!!
+    print(f"\nAttempting to get stats for specific device: {example_device_name}")
+    try:
+        specific_device_stats = py_metrics_agent.get_disk_stats(example_device_name)
+        print(f"  Stats for '{example_device_name}': {specific_device_stats}")
+        print(f"  Total bytes read for '{example_device_name}': {format_bytes(specific_device_stats.read_bytes)}")
+        print(f"  Total bytes written for '{example_device_name}': {format_bytes(specific_device_stats.write_bytes)}")
+    except RuntimeError as e:
+        print(f"  Could not get stats for '{example_device_name}': {e}")
+        print(f"  (Hint: Please check if '{example_device_name}' is a correct device name on your system using 'lsblk')")
+
+
+    # Test calculate_disk_io_throughput
+    prev_disk_snap = py_metrics_agent.DiskStats(
+        device="nvme0n1", read_bytes=0, write_bytes=0, read_time_ms=0, write_time_ms=0
+    )
+    curr_disk_snap = py_metrics_agent.DiskStats(
+        device="nvme0n1", read_bytes=10240, write_bytes=5120, read_time_ms=100, write_time_ms=50
+    )
+    disk_time_delta_ms = 1000 # 1 second interval
+
+    io_throughput = py_metrics_agent.calculate_disk_io_throughput(
+        curr_disk_snap, prev_disk_snap, disk_time_delta_ms
+    )
+    print(f"\nDisk I/O throughput (nvme0n1) over {disk_time_delta_ms}ms: Read {io_throughput.read_kbps:.2f} KB/s, Write {io_throughput.write_kbps:.2f} KB/s")
+
+    # Test error for non-positive time_delta_ms
+    try:
+        py_metrics_agent.calculate_disk_io_throughput(curr_disk_snap, prev_disk_snap, 0)
+    except ValueError as e:
+        print(f"Caught expected error for 0 time_delta: {e}")
+
+except AttributeError as e:
+    print(f"Error accessing DiskStats attributes/methods: {e}. Check DiskStats binding in C++.")
+except TypeError as e:
+    print(f"Error creating DiskStats object: {e}. Check DiskStats constructor binding in C++.")
+except Exception as e:
+    print(f"An error occurred during disk stats testing: {e}")
+
+print("\n--- Testing Disk and DiskStatsReader (Live Monitoring Example) ---")
+
+# --- Example 1: Get total aggregated stats ---
+print("## Monitoring Total Disk I/O ##\n")
+
+try:
+    # Get initial stats
+    last_stats_aggregated = py_metrics_agent.get_disk_stats()
+    last_time = time.time()
+
+    print(f"Initial aggregated state: {last_stats_aggregated}")
+
+    print("\nMonitoring I/O for 5 seconds...")
+    time.sleep(5)
+
+    # Get new stats
+    current_stats_aggregated = py_metrics_agent.get_disk_stats()
+    current_time = time.time()
+
+    # Calculate the difference in time and bytes
+    time_delta = current_time - last_time
+    read_delta = current_stats_aggregated.read_bytes - last_stats_aggregated.read_bytes
+    write_delta = current_stats_aggregated.write_bytes - last_stats_aggregated.write_bytes
+
+    # Calculate rate in bytes/sec
+    read_rate = read_delta / time_delta
+    write_rate = write_delta / time_delta
+
+    print(f"Final aggregated state:   {current_stats_aggregated}")
+    print(f"Read Rate:     {format_bytes(read_rate)}/s")
+    print(f"Write Rate:    {format_bytes(write_rate)}/s")
+
+except Exception as e:
+    print(f"An error occurred during live disk monitoring example: {e}")
+
+print("\n" + "="*40 + "\n")

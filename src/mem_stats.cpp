@@ -1,80 +1,87 @@
 #include "mem_stats.hpp"
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <stdexcept>
 
 namespace SystemMemoryStats {
 
-#ifdef __linux__
-MemStats MeMStatsReader::getMemStats(std::istream& input) {
-    if (!input) {
-        throw std::runtime_error("Could not open /proc/meminfo");
+    unsigned long long MeMStatsReader::parseMeminfoLine(const std::string& line, const std::string& key) {
+        // Look for the key at the beginning of the line
+        if (line.rfind(key, 0) == 0) { // Check if 'line' starts with 'key'
+            std::istringstream iss(line);
+            std::string temp_key;
+            unsigned long long value;
+            std::string unit; // Should be "kB"
+
+            iss >> temp_key >> value >> unit;
+
+            if (iss.fail() || unit != "kB") {
+                throw std::runtime_error("Failed to parse value for key '" + key + "' from line: " + line);
+            }
+            return value;
+        }
+        return 0; // Return 0 if the key is not found on this line
     }
-    
-    std::string line;
-    std::printf("Reading memory stats from /proc/meminfo\n");
-    
-    // Initialize the MemStats structure
-    MemStats stats = {0, 0, 0, 0, 0};
 
-    while (std::getline(input, line)) {
-        std::istringstream ss(line);
-        std::string key;
-        unsigned long value;
-        std::string unit;
+    MemStats MeMStatsReader::getMemStats() {
+        std::ifstream file("/proc/meminfo");
+        if (!file.is_open()) {
+            throw std::runtime_error("Could not open /proc/meminfo for reading memory statistics.");
+        }
 
-        if (ss >> key >> value >> unit) {
-            if (unit == "kB") {
-                if (key == "MemTotal:") {
-                    stats.total = value;
-                } else if (key == "MemFree:") {
-                    stats.free = value;
-                } else if (key == "MemAvailable:") {
-                    stats.available = value;
-                } else if (key == "Buffers:") {
-                    stats.buffers = value;
-                } else if (key == "Cached:") {
-                    stats.cached = value;
+        MemStats stats;
+        std::string line;
+
+        // Use a map to track found keys to prevent double counting or unnecessary parsing.
+        // This is useful if parsing stops after certain keys are found for optimization,
+        // though for meminfo, it's typically quick to read the whole file.
+        std::map<std::string, bool> found_keys;
+
+        while (std::getline(file, line)) {
+            try {
+                if (line.rfind("MemTotal:", 0) == 0) {
+                    stats.total = parseMeminfoLine(line, "MemTotal:");
+                    found_keys["MemTotal"] = true;
+                } else if (line.rfind("MemFree:", 0) == 0) {
+                    stats.free = parseMeminfoLine(line, "MemFree:");
+                    found_keys["MemFree"] = true;
+                } else if (line.rfind("MemAvailable:", 0) == 0) {
+                    stats.available = parseMeminfoLine(line, "MemAvailable:");
+                    found_keys["MemAvailable"] = true;
+                } else if (line.rfind("Buffers:", 0) == 0) {
+                    stats.buffers = parseMeminfoLine(line, "Buffers:");
+                    found_keys["Buffers"] = true;
+                } else if (line.rfind("Cached:", 0) == 0) {
+                    stats.cached = parseMeminfoLine(line, "Cached:");
+                    found_keys["Cached"] = true;
+                } else if (line.rfind("SwapTotal:", 0) == 0) {
+                    stats.swap_total = parseMeminfoLine(line, "SwapTotal:");
+                    found_keys["SwapTotal"] = true;
+                } else if (line.rfind("SwapFree:", 0) == 0) {
+                    stats.swap_free = parseMeminfoLine(line, "SwapFree:");
+                    found_keys["SwapFree"] = true;
                 }
+
+                // Optimization: If all expected keys are found, we can stop reading the file.
+                // Adjust this check if more fields are added to MemStats.
+                if (found_keys["MemTotal"] && found_keys["MemFree"] && found_keys["MemAvailable"] &&
+                    found_keys["Buffers"] && found_keys["Cached"] &&
+                    found_keys["SwapTotal"] && found_keys["SwapFree"]) {
+                    break;
+                }
+            } catch (const std::runtime_error& e) {
+                std::cerr << "Warning: Skipping malformed meminfo line: " << e.what() << std::endl;
             }
         }
-    }
-    if (stats.total == 0) {
-        throw std::runtime_error("Failed to read memory stats from /proc/meminfo");
-        return stats; // Return empty stats if no data was read
-    }
-    return stats; // Return the populated stats
-}
 
-MemStats MeMStatsReader::getMemStats() {
-    std::ifstream file("/proc/meminfo");
-    if (!file.is_open()) {
-        throw std::runtime_error("Could not open /proc/meminfo");
-    }
-    return MeMStatsReader::getMemStats(file);
-}
+        // Basic validation: ensure essential fields were read
+        if (!(found_keys["MemTotal"] && found_keys["MemFree"] && found_keys["MemAvailable"])) {
+             throw std::runtime_error("Failed to find essential memory statistics in /proc/meminfo.");
+        }
 
-#elif _WIN64
-#include <windows.h>
-MemStats MeMStatsReader::getMemStats() {
-    MEMORYSTATUSEX memStatus;
-    memStatus.dwLength = sizeof(memStatus);
-    if (!GlobalMemoryStatusEx(&memStatus)) {
-        throw std::runtime_error("GlobalMemoryStatusEx failed");
+        return stats;
     }
-    MemStats mem{};
-    mem.total = memStatus.ullTotalPhys / 1024;
-    mem.free = memStatus.ullAvailPhys / 1024;
-    mem.available = mem.free;
-    mem.buffers = 0;
-    mem.cached = 0;
-    return mem; 
-}
-#elif _WIN32
-#include <windows.h>
-MemStats MeMStatsReader::getMemStats() {
-    throw std::runtime_error("Memory stats not supported on _WIN32");
-}
-#else
-MemStats MeMStatsReader::getMemStats() {
-    throw std::runtime_error("Memory stats not supported on this platform");
-}
-#endif // __linux__
+
 } // namespace SystemMemoryStats
