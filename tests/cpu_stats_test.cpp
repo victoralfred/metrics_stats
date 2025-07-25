@@ -1,6 +1,5 @@
 // Include Google Test headers
 #include "gtest/gtest.h"
-
 #include <sstream>    // For std::stringstream
 #include <thread>     // For std::this_thread::sleep_for
 #include <chrono>     // For std::chrono::milliseconds
@@ -16,10 +15,6 @@
 
 // Include your system stat headers
 #include "cpu_stats.hpp"
-#include "mem_stats.hpp"
-#include "disk_stats.hpp"
-#include "net_stats.hpp"
-
 // --- Test Cases for CPUStats struct ---
 
 TEST(CPUStatsTest, ConstructorInitialization) {
@@ -242,195 +237,10 @@ TEST(CPUUsageCalculationDemo, UserCalculatesPercentage) {
         FAIL() << "CPU Usage Calculation Demo failed: " << e.what();
     }
 }
-// Simple helper for test cases (not a full-fledged test framework)
-#define TEST_CASE(name) \
-    void name(); \
-    int main() { \
-        std::cout << "--- Running Test Case: " << #name << " ---\n"; \
-        try { \
-            name(); \
-            std::cout << "--- Test Case: " << #name << " PASSED ---\n\n"; \
-        } catch (const std::exception& e) { \
-            std::cerr << "--- Test Case: " << #name << " FAILED: " << e.what() << " ---\n\n"; \
-            return 1; \
-        } \
-        return 0; \
-    } \
-    void name()
 
-// --- Test Case for Memory Statistics ---
-void testMemStats() {
-    std::cout << "Testing SystemMemoryStats::MeMStatsReader::getMemStats()\n";
-    SystemMemoryStats::MemStats memStats = SystemMemoryStats::MeMStatsReader::getMemStats();
 
-    std::cout << "Total Memory: " << memStats.total << " KB\n";
-    std::cout << "Free Memory: " << memStats.free << " KB\n";
-    std::cout << "Available Memory: " << memStats.available << " KB\n";
-    std::cout << "Buffers: " << memStats.buffers << " KB\n";
-    std::cout << "Cached: " << memStats.cached << " KB\n";
-    std::cout << "Swap Total: " << memStats.swap_total << " KB\n";
-    std::cout << "Swap Free: " << memStats.swap_free << " KB\n";
-
-    // Basic assertions
-    assert(memStats.total > 0 && "Total memory should be greater than 0");
-    assert(memStats.free <= memStats.total && "Free memory should not exceed total memory");
-    assert(memStats.available <= memStats.total && "Available memory should not exceed total memory");
-}
-
-// --- Test Case for Disk Statistics ---
-void testDiskStats() {
-    std::cout << "Testing SystemDiskStats::DiskStatsReader::getDiskStats() (Aggregated)\n";
-    SystemDiskStats::DiskStats aggregatedDiskStats = SystemDiskStats::DiskStatsReader::getDiskStats();
-
-    std::cout << "Aggregated Disk Stats:\n";
-    std::cout << "  Device: " << aggregatedDiskStats.device << "\n";
-    std::cout << "  Read Bytes: " << aggregatedDiskStats.read_bytes << "\n";
-    std::cout << "  Write Bytes: " << aggregatedDiskStats.write_bytes << "\n";
-    std::cout << "  Read Time (ms): " << aggregatedDiskStats.read_time_ms << "\n";
-    std::cout << "  Write Time (ms): " << aggregatedDiskStats.write_time_ms << "\n";
-
-    // Basic assertions
-    assert(aggregatedDiskStats.read_bytes >= 0 && "Aggregated read bytes should be non-negative");
-    assert(aggregatedDiskStats.write_bytes >= 0 && "Aggregated write bytes should be non-negative");
-
-    std::cout << "\nTesting SystemDiskStats::DiskStatsReader::getDiskStats(device_name)\n";
-    // IMPORTANT: Replace "nvme0n1" with a device name that actually exists on your system.
-    // Use `lsblk` or `cat /proc/diskstats` in your terminal to find actual device names.
-    std::string testDeviceName = "nvme0n1"; // Common for cloud VMs, could be "sda", "nvme0n1" etc.
-
-    try {
-        SystemDiskStats::DiskStats deviceDiskStats = SystemDiskStats::DiskStatsReader::getDiskStats(testDeviceName);
-        std::cout << "Disk Stats for " << testDeviceName << ":\n";
-        std::cout << "  Device: " << deviceDiskStats.device << "\n";
-        std::cout << "  Read Bytes: " << deviceDiskStats.read_bytes << "\n";
-        std::cout << "  Write Bytes: " << deviceDiskStats.write_bytes << "\n";
-        std::cout << "  Read Time (ms): " << deviceDiskStats.read_time_ms << "\n";
-        std::cout << "  Write Time (ms): " << deviceDiskStats.write_time_ms << "\n";
-
-        assert(deviceDiskStats.device == testDeviceName && "Device name should match requested");
-        assert(deviceDiskStats.read_bytes >= 0 && "Device read bytes should be non-negative");
-
-    } catch (const std::runtime_error& e) {
-        std::cerr << "Warning: Could not get stats for device '" << testDeviceName << "': " << e.what() << "\n";
-        std::cerr << "Please ensure '" << testDeviceName << "' is a valid disk device on your system for this test to fully pass.\n";
-        // Do not assert false here, as it's a known potential environmental issue for the test.
-    }
-}
-
-// --- Test Case for Network Statistics ---
-void testNetStats() {
-    std::cout << "Testing SystemNetworkStats::NetworkStatsReader::getNetStatsPerINterface()\n";
-    std::map<std::string, SystemNetworkStats::NetStats> netStatsMap {};
-    // Retrieve network stats for all interfaces and store in a map
-    try {
-        netStatsMap = SystemNetworkStats::NetworkStatsReader::getNetStatsPerINterface();
-    } catch (const std::runtime_error& e) {
-        std::cerr << "Error retrieving network stats: " << e.what() << "\n";
-        return; // Exit the test if we cannot retrieve network stats
-    }
-    // Check if the map is not empty
-    std::cout << "Retrieved Network Stats for " << netStatsMap.size() << " interfaces.\n";
-    // Ensure we have at least one interface to test against
-    assert(netStatsMap.size() > 0 && "Network stats map should contain at least one interface");
-
-    std::cout << "Network Statistics for all interfaces:\n";
-    for (const auto& pair : netStatsMap) {
-        const std::string& interfaceName = pair.first;
-        const SystemNetworkStats::NetStats& netStats = pair.second;
-
-        std::cout << "  Interface: " << interfaceName << "\n";
-        std::cout << "    Rx Bytes: " << netStats.rx_bytes << "\n";
-        std::cout << "    Tx Bytes: " << netStats.tx_bytes << "\n";
-        std::cout << "    Rx Packets: " << netStats.rx_packets << "\n";
-        std::cout << "    Tx Packets: " << netStats.tx_packets << "\n";
-        std::cout << "    Rx Errors: " << netStats.rx_errors << "\n";
-        std::cout << "    Tx Errors: " << netStats.tx_errors << "\n";
-        std::cout << "    Rx Dropped: " << netStats.rx_dropped << "\n";
-        std::cout << "    Tx Dropped: " << netStats.tx_dropped << "\n";
-
-        // Basic assertions
-        assert(!interfaceName.empty() && "Interface name should not be empty");
-        assert(netStats.rx_bytes >= 0 && "Rx bytes should be non-negative");
-        assert(netStats.tx_bytes >= 0 && "Tx bytes should be non-negative");
-    }
-}
-
-// --- Test Case for CPU Statistics ---
-void testCpuStats() {
-    std::cout << "Testing SystemCPUStats::CPUStatsReader::getCPUStats()\n";
-    SystemCPUStats::CPUStats cpuStats1 = SystemCPUStats::CPUStatsReader::getCPUStats();
-
-    std::cout << "Initial CPU Stats:\n";
-    std::cout << "  User: " << cpuStats1.user << "\n";
-    std::cout << "  System: " << cpuStats1.system << "\n";
-    std::cout << "  Idle: " << cpuStats1.idle << "\n";
-    std::cout << "  Total Active Time: " << cpuStats1.getTotalActiveTime() << "\n";
-    std::cout << "  Total Time: " << cpuStats1.getTotalTime() << "\n";
-
-    // Wait for a short interval to get new stats for usage calculation
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-    SystemCPUStats::CPUStats cpuStats2 = SystemCPUStats::CPUStatsReader::getCPUStats();
-
-    double usage = SystemCPUStats::calculateUsagePercentage(cpuStats2, cpuStats1, 500);
-    std::cout << "CPU Usage (over 500ms): " << usage << "%\n";
-
-    // Basic assertions
-    assert(cpuStats1.getTotalTime() > 0 && "Initial total CPU time should be greater than 0");
-    assert(usage >= 0 && usage <= 100 && "CPU usage should be between 0 and 100%");
-}
-
-// Example main function to run all tests
-// For simplicity, this main function calls all test cases.
-// If you have individual test files (e.g., cpu_stats_test.cpp, disk_stats_test.cpp)
-// that also define their own 'main' functions, you MUST remove those 'main' functions
-// when linking them with this file, or compile them as separate executables.
 // --- Main function to run tests ---
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
-
-    std::cout << "Starting C++ System Metrics Tests...\n\n";
-
-    // Run CPU Stats Test
-    std::cout << "--- Running Test Case: testCpuStats ---\n";
-    try {
-        testCpuStats();
-        std::cout << "--- Test Case: testCpuStats PASSED ---\n\n";
-    } catch (const std::exception& e) {
-        std::cerr << "--- Test Case: testCpuStats FAILED: " << e.what() << " ---\n\n";
-        return 1; // Indicate failure
-    }
-
-    // Run Memory Stats Test
-    std::cout << "--- Running Test Case: testMemStats ---\n";
-    try {
-        testMemStats();
-        std::cout << "--- Test Case: testMemStats PASSED ---\n\n";
-    } catch (const std::exception& e) {
-        std::cerr << "--- Test Case: testMemStats FAILED: " << e.what() << " ---\n\n";
-        return 1; // Indicate failure
-    }
-
-    // Run Disk Stats Test
-    std::cout << "--- Running Test Case: testDiskStats ---\n";
-    try {
-        testDiskStats();
-        std::cout << "--- Test Case: testDiskStats PASSED ---\n\n";
-    } catch (const std::exception& e) {
-        std::cerr << "--- Test Case: testDiskStats FAILED: " << e.what() << " ---\n\n";
-        return 1; // Indicate failure
-    }
-
-    // Run Network Stats Test
-    std::cout << "--- Running Test Case: testNetStats ---\n";
-    try {
-        testNetStats();
-        std::cout << "--- Test Case: testNetStats PASSED ---\n\n";
-    } catch (const std::exception& e) {
-        std::cerr << "--- Test Case: testNetStats FAILED: " << e.what() << " ---\n\n";
-        return 1; // Indicate failure
-    }
-
-    std::cout << "All C++ System Metrics Tests Completed.\n";
     return RUN_ALL_TESTS();
 }

@@ -78,6 +78,7 @@ add_library(metrics_agent STATIC # Define as STATIC library
     src/mem_stats.cpp
     src/disk_stats.cpp
     src/net_stats.cpp
+    src/logger.cpp
     # Add all other source files that are part of your core C++ library here
 )
 
@@ -117,12 +118,6 @@ pybind11_add_module(py_metrics_agent # This is the name your Python code will 'i
 # (OpenSSL, nlohmann_json, jwt-cpp) are typically pulled in transitively.
 target_link_libraries(py_metrics_agent PRIVATE
     metrics_agent # Link to your core C++ library
-    # REMOVED: Redundant direct linking to OpenSSL, nlohmann_json, jwt-cpp.
-    # These are already linked by 'metrics_agent' and will be transitively linked to 'py_metrics_agent'.
-    # OpenSSL::SSL
-    # OpenSSL::Crypto
-    # nlohmann_json::nlohmann_json
-    # jwt-cpp::jwt-cpp
 )
 
 # Ensure the binding module can find your project's headers (like SystemCPUStats.h)
@@ -139,7 +134,10 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 # Define the test executable
 add_executable(metrics_agent_test
-    tests/metric_agent_stats_test.cpp
+    tests/cpu_stats_test.cpp
+    tests/disk_stats_test.cpp
+    tests/mem_stats_test.cpp
+    tests/net_stats_test.cpp
 )
 target_compile_definitions(metrics_agent_test PRIVATE TESTING_BUILD) # Define a macro for test-specific code
 

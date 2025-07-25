@@ -7,10 +7,6 @@
 #include <istream>     // For std::istream in the overloaded getCPUStats
 
 namespace SystemCPUStats {
-
-/// @brief Represents a snapshot of CPU time fields.
-/// This struct is designed to be a Plain Old Data (POD) type for holding CPU statistics.
-/// All members are public by design, as it primarily serves as a data container.
 struct CPUStats {
     double user;       ///< User CPU time
     double nice;       ///< Nice CPU time
@@ -86,11 +82,11 @@ private:
     CPUStatsReader& operator=(const CPUStatsReader&) = delete;
 
     // Platform-specific raw CPUStats retrieval functions
-#ifdef _WIN32
+#if defined(_WIN32)
     static CPUStats getRawWindowsCpuStats();
-#elif __linux__
+#elif defined(__linux__)
     static CPUStats getRawLinuxCpuStats();
-#elif __APPLE__
+#elif defined(__APPLE__)
     static CPUStats getRawMacCpuStats();
 #else
     // Fallback for unsupported platforms if no specific implementation is defined

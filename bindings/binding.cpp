@@ -1,25 +1,27 @@
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <pybind11/stl.h> // Required for std::vector for DiskStats/NetStats
+#include <pybind11/iostream.h> // For redirecting C++ streams to Python print
 #include <thread> // For std::this_thread::sleep_for
 #include <chrono> // For std::chrono::milliseconds
 #include <sstream> // For std::stringstream
-#include <map> // For std::map in network stats (though not strictly used in this file for binding a map directly)
+#include <map> // Required if any C++ function returns std::map (e.g., if a future getNetStatsPerInterface returns map)
 
+// Include your C++ headers for the various stats
 #include "cpu_stats.hpp"
 #include "mem_stats.hpp"
-#include "disk_stats.hpp" // Assuming this header defines DiskStats with 'device', 'read_time_ms', 'write_time_ms'
-#include "net_stats.hpp"   // Assuming this header defines NetStats with all its members
+#include "disk_stats.hpp"
+#include "net_stats.hpp"
 
 namespace py = pybind11;
-namespace scs = SystemCPUStats; // Alias for SystemCPUStats namespace
 
-// Bring types into local scope for convenience in bindings
+// Alias namespaces for convenience in bindings
+namespace scs = SystemCPUStats;
 using SystemMemoryStats::MemStats;
 using SystemMemoryStats::MeMStatsReader;
 using SystemDiskStats::DiskStats;
 using SystemDiskStats::DiskStatsReader;
-using SystemNetworkStats::NetStats;
-using SystemNetworkStats::NetworkStatsReader;
+using SystemNetStats::NetStats; // Corrected from SystemNetworkStats
+using SystemNetStats::NetStatsReader; // Corrected from NetworkStatsReader
 
 // --- New structs and functions for throughput calculations ---
 // These are defined here assuming they are utility functions that might not
@@ -41,9 +43,9 @@ NetThroughputResult calculateNetworkThroughput(const NetStats& current_stats, co
         throw py::value_error("Time delta must be positive for throughput calculation.");
     }
 
-    // Calculate byte differences
-    double delta_rx_bytes = static_cast<double>(current_stats.rx_bytes - previous_stats.rx_bytes);
-    double delta_tx_bytes = static_cast<double>(current_stats.tx_bytes - previous_stats.tx_bytes);
+    // Calculate byte differences using the correct member names from NetStats struct
+    double delta_rx_bytes = static_cast<double>(current_stats.bytes_received - previous_stats.bytes_received);
+    double delta_tx_bytes = static_cast<double>(current_stats.bytes_sent - previous_stats.bytes_sent);
 
     // Convert time delta from milliseconds to seconds
     double time_delta_s = static_cast<double>(time_delta_ms) / 1000.0;
@@ -92,8 +94,11 @@ scs::CPUStats get_cpu_stats_from_string(const std::string& input_str) {
     return scs::CPUStatsReader::getCPUStats(ss);
 }
 
-PYBIND11_MODULE(py_metrics_agent, m) {
-    m.doc() = "pybind11 plugin for system metrics agent (CPU, Memory, Disk, Network)";
+PYBIND11_MODULE(py_metrics_agent, m) { // Module name as requested for py_metrics_agent
+    m.doc() = "Pybind11 plugin for system metrics agent (CPU, Memory, Disk, Network)"; // Updated docstring
+
+    // Optional: Redirect C++ std::cout and std::cerr to Python's sys.stdout/stderr
+    py::add_ostream_redirect(m, "ostream_redirect");
 
     // --- CPU Statistics Bindings ---
     py::class_<scs::CPUStats>(m, "CPUStats")
@@ -129,18 +134,19 @@ PYBIND11_MODULE(py_metrics_agent, m) {
                        ", idle=" + std::to_string(s.idle) +
                        ", usage=" + std::to_string(s.usage_percent) + "%>";
             });
-            // Bind CPUStatsReader's static methods directly to the module
-        m.def("get_cpu_stats", static_cast<scs::CPUStats (*)()>(&scs::CPUStatsReader::getCPUStats),
-            "Retrieves current CPU statistics from the system's default source. Returns raw data.");
 
-        m.def("get_cpu_stats_from_string", &get_cpu_stats_from_string,
-            "Retrieves CPU statistics from a provided input string (e.g., mock /proc/stat data).",
-            py::arg("input_str"));
+    // Bind CPUStatsReader's static methods directly to the module
+    m.def("get_cpu_stats", static_cast<scs::CPUStats (*)()>(&scs::CPUStatsReader::getCPUStats),
+        "Retrieves current CPU statistics from the system's default source. Returns raw data.");
 
-        // Bind the standalone calculateUsagePercentage function
-        m.def("calculate_usage_percentage", &scs::calculateUsagePercentage,
-            "Calculates the CPU usage percentage between two CPUStats snapshots over a given time delta.",
-            py::arg("current_stats"), py::arg("previous_stats"), py::arg("time_delta_ms"));
+    m.def("get_cpu_stats_from_string", &get_cpu_stats_from_string,
+        "Retrieves CPU statistics from a provided input string (e.g., mock /proc/stat data).",
+        py::arg("input_str"));
+
+    // Bind the standalone calculateUsagePercentage function
+    m.def("calculate_cpu_usage_percentage", &scs::calculateUsagePercentage, // Renamed for clarity in Python
+        "Calculates the CPU usage percentage between two CPUStats snapshots over a given time delta.",
+        py::arg("current_stats"), py::arg("previous_stats"), py::arg("time_delta_ms"));
 
     // Optional: Add a convenient Python function to get CPU usage over a period.
     m.def("get_cpu_usage_over_time",
@@ -165,12 +171,11 @@ PYBIND11_MODULE(py_metrics_agent, m) {
     // --- Disk Statistics Bindings ---
     py::class_<DiskStats>(m, "DiskStats")
         .def(py::init<>()) // Default constructor
-        // Constructor matching the Python test script's usage, assuming these members exist in C++ DiskStats
+        // Constructor matching the full DiskStats struct
         .def(py::init<std::string, unsigned long long, unsigned long long, unsigned long long, unsigned long long>(),
              py::arg("device") = "", py::arg("read_bytes") = 0, py::arg("write_bytes") = 0,
              py::arg("read_time_ms") = 0, py::arg("write_time_ms") = 0)
-        // Expose public data members for DiskStats. Assuming 'device', 'read_time_ms', 'write_time_ms'
-        // are members of the C++ DiskStats struct in disk_stats.hpp.
+        // Expose public data members for DiskStats
         .def_readwrite("device", &DiskStats::device)
         .def_readwrite("read_bytes", &DiskStats::read_bytes)
         .def_readwrite("write_bytes", &DiskStats::write_bytes)
@@ -183,11 +188,11 @@ PYBIND11_MODULE(py_metrics_agent, m) {
         });
 
     // Bind the static functions for DiskStatsReader
-    m.def("get_disk_stats",
+    m.def("get_disk_stats_aggregated", // Renamed for clarity for Python consumers
         py::overload_cast<>(&DiskStatsReader::getDiskStats),
         "Get aggregated disk stats for all physical devices.");
 
-    m.def("get_disk_stats",
+    m.def("get_disk_stats_by_device", // Renamed for clarity for Python consumers
         py::overload_cast<const std::string&>(&DiskStatsReader::getDiskStats),
         "Get disk stats for a specific device.",
         py::arg("device_name"));
@@ -225,6 +230,7 @@ PYBIND11_MODULE(py_metrics_agent, m) {
                    ", cached=" + std::to_string(s.cached) + ">";
         });
 
+    // FIX: Corrected binding for static getMemStats() method - removed unnecessary static_cast
     m.def("get_mem_stats", &MeMStatsReader::getMemStats,
         "Retrieves current memory statistics.");
 
@@ -238,56 +244,44 @@ PYBIND11_MODULE(py_metrics_agent, m) {
             return "<NetThroughputResult rx_kbps=" + std::to_string(s.rx_kbps) +
                    "KB/s, tx_kbps=" + std::to_string(s.tx_kbps) + "KB/s>";
         });
-        std::string interface_name; // Name of the network interface (e.g., "eth0", "lo")
-        unsigned long long rx_bytes;   // Bytes received
-        unsigned long long rx_packets; // Packets received
-        unsigned long long rx_errors;  // Receive errors
-        unsigned long long rx_dropped; // Receive packets dropped
-        unsigned long long tx_bytes;   // Bytes transmitted
-        unsigned long long tx_packets; // Packets transmitted
-        unsigned long long tx_errors;  // Transmit errors
-        unsigned long long tx_dropped; // Transmit packets dropped
+
+    // Bind the NetStats struct to a Python class
     py::class_<NetStats>(m, "NetStats")
         .def(py::init<>()) // Default constructor
         // Constructor matching the full NetStats struct in net_stats.hpp
         .def(py::init<std::string, unsigned long long, unsigned long long, unsigned long long, unsigned long long,
                       unsigned long long, unsigned long long, unsigned long long, unsigned long long>(),
              py::arg("interface_name") = "",
-             py::arg("rx_bytes") = 0, py::arg("rx_packets") = 0, py::arg("rx_errors") = 0, py::arg("rx_dropped") = 0,
-             py::arg("tx_bytes") = 0, py::arg("tx_packets") = 0, py::arg("tx_errors") = 0, py::arg("tx_dropped") = 0)
+             py::arg("bytes_received") = 0, py::arg("bytes_sent") = 0, py::arg("packets_received") = 0, py::arg("packets_sent") = 0,
+             py::arg("errors_in") = 0, py::arg("errors_out") = 0, py::arg("drops_in") = 0, py::arg("drops_out") = 0) // Corrected tx_errors to errors_out here too
+        // Bind each member variable directly. py::rw allows read/write access.
         .def_readwrite("interface_name", &NetStats::interface_name)
-        .def_readwrite("rx_bytes", &NetStats::rx_bytes)
-        .def_readwrite("rx_packets", &NetStats::rx_packets)
-        .def_readwrite("rx_errors", &NetStats::rx_errors)
-        .def_readwrite("rx_dropped", &NetStats::rx_dropped)
-        .def_readwrite("tx_bytes", &NetStats::tx_bytes)
-        .def_readwrite("tx_packets", &NetStats::tx_packets)
-        .def_readwrite("tx_errors", &NetStats::tx_errors)
-        .def_readwrite("tx_dropped", &NetStats::tx_dropped)
-        .def("__repr__", [](const NetStats &s) {
-            return "<NetStats interface=" + s.interface_name +
-                   ", rx_bytes=" + std::to_string(s.rx_bytes) +
-                   ", tx_bytes=" + std::to_string(s.tx_bytes) + ">";
-        });
+        .def_readwrite("bytes_received", &NetStats::bytes_received)
+        .def_readwrite("bytes_sent", &NetStats::bytes_sent)
+        .def_readwrite("packets_received", &NetStats::packets_received)
+        .def_readwrite("packets_sent", &NetStats::packets_sent)
+        .def_readwrite("errors_in", &NetStats::errors_in)
+        .def_readwrite("errors_out", &NetStats::errors_out)
+        .def_readwrite("drops_in", &NetStats::drops_in)
+        .def_readwrite("drops_out", &NetStats::drops_out)
+        // Add a __repr__ method for better printing in Python
+        .def("__repr__",
+             [](const NetStats &s) {
+                 return "<NetStats interface_name='" + s.interface_name +
+                        "', bytes_received=" + std::to_string(s.bytes_received) +
+                        ", bytes_sent=" + std::to_string(s.bytes_sent) + ">";
+             });
 
-    // Bind the static functions for NetworkStatsReader
-    m.def("get_net_stats",
-        py::overload_cast<>(&NetworkStatsReader::getNetStats),
-        "Get aggregated network stats for all active interfaces.");
+    // Bind the NetStatsReader class to a Python class
+    // All methods are static, so no need for a constructor binding for the class itself
+    m.def("get_net_stats_aggregated", // Renamed for clarity for Python consumers
+        py::overload_cast<>(&NetStatsReader::getNetStats),
+        "Retrieves aggregated network statistics across all active interfaces.");
 
-    // NOTE: The C++ NetworkStatsReader::getNetStats() only has a no-argument overload.
-    // If you intend to have a getNetStats(interface_name) in C++, you'll need to add it.
-    // For now, this overload_cast for string is commented out as it doesn't exist in the current C++
-    /*
-    m.def("get_net_stats",
-        py::overload_cast<const std::string&>(&NetworkStatsReader::getNetStats),
-        "Get network stats for a specific interface.",
+    m.def("get_net_stats_by_interface", // Renamed for clarity for Python consumers
+        py::overload_cast<const std::string&>(&NetStatsReader::getNetStats),
+        "Retrieves network statistics for a specific network interface.",
         py::arg("interface_name"));
-    */
-
-    // Preserve the binding for getNetStatsPerINterface as requested previously
-    m.def("get_net_stats_per_interface", &NetworkStatsReader::getNetStatsPerINterface,
-        "Retrieves network statistics for all interfaces as a map where key is interface name and value is NetStats object.");
 
     // Bind the calculateNetworkThroughput function
     m.def("calculate_network_throughput", &calculateNetworkThroughput,

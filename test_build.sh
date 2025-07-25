@@ -67,11 +67,11 @@ fi
 echo "Build process completed successfully!"
 
 # --- Optional: Run Tests ---
-# echo "Running tests..." 
-# ctest --verbose         
-# if [ $? -ne 0 ]; then    
-#     echo "Error: Tests failed."
-#     exit 1
-# fi                       
+echo "Running tests..." 
+ctest --verbose         
+if [ $? -ne 0 ]; then    
+    echo "Error: Tests failed."
+    exit 1
+fi                       
 
 echo "Build process completed successfully!"
